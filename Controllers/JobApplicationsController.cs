@@ -1,11 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using JobPortalAPI.Data;
 using JobPortalAPI.Models;
+using JobPortalAPI.Services;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using System.Linq;
 
 namespace JobPortalAPI.Controllers
 {
@@ -13,11 +11,11 @@ namespace JobPortalAPI.Controllers
     [ApiController]
     public class JobApplicationsController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly ApplicationService _applicationService;
 
-        public JobApplicationsController(ApplicationDbContext context)
+        public JobApplicationsController(ApplicationService applicationService)
         {
-            _context = context;
+            _applicationService = applicationService;
         }
 
         // ✅ Apply for a Job (Job Seeker Only)
@@ -26,11 +24,14 @@ namespace JobPortalAPI.Controllers
         public async Task<IActionResult> ApplyForJob([FromBody] JobApplication application)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier); // Get logged-in user ID
+            if (userId == null)
+            {
+                return Unauthorized("User ID not found.");
+            }
             application.JobSeekerId = userId;
 
-            _context.JobApplications.Add(application);
-            await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetApplicationById), new { id = application.Id }, application);
+            var createdApplication = await _applicationService.SubmitApplicationAsync(application);
+            return CreatedAtAction(nameof(GetApplicationById), new { id = createdApplication.Id }, createdApplication);
         }
 
         // ✅ Get All Applications for a Job (Employer Only)
@@ -38,10 +39,7 @@ namespace JobPortalAPI.Controllers
         [Authorize(Roles = "Employer")]
         public async Task<IActionResult> GetApplicationsForJob(int jobId)
         {
-            var applications = await _context.JobApplications
-                .Where(a => a.JobId == jobId)
-                .ToListAsync();
-
+            var applications = await _applicationService.GetApplicationsByJobIdAsync(jobId);
             return Ok(applications);
         }
 
@@ -50,12 +48,12 @@ namespace JobPortalAPI.Controllers
         [Authorize]
         public async Task<IActionResult> GetApplicationById(int id)
         {
-            var application = await _context.JobApplications.FindAsync(id);
+            var application = await _applicationService.GetApplicationsByJobIdAsync(id);
             if (application == null)
                 return NotFound("Application not found.");
 
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (application.JobSeekerId != userId && !User.IsInRole("Employer"))
+            if (application.FirstOrDefault()?.JobSeekerId != userId && !User.IsInRole("Employer"))
                 return Forbid("Access denied.");
 
             return Ok(application);
@@ -66,13 +64,11 @@ namespace JobPortalAPI.Controllers
         [Authorize(Roles = "Employer")]
         public async Task<IActionResult> UpdateApplicationStatus(int id, [FromBody] string status)
         {
-            var application = await _context.JobApplications.FindAsync(id);
+            var application = await _applicationService.GetApplicationsByJobIdAsync(id);
             if (application == null)
                 return NotFound("Application not found.");
 
-            application.Status = status;
-            _context.JobApplications.Update(application);
-            await _context.SaveChangesAsync();
+            application.FirstOrDefault().Status = status;
             return Ok(application);
         }
     }

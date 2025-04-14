@@ -14,17 +14,20 @@ namespace JobPortalAPI.Models
         public string Email { get; set; }
 
         [Required]
-        public string PasswordHash { get; set; }  // Stored hashed using bcrypt
+        public string PasswordHash { get; set; }  // Stored hashed using bcrypt  
 
         [Required]
         public UserRole Role { get; set; }
 
-        // Additional fields for profiles (depending on role)
-        public string FullName { get; set; }
+        // Updated fields for profiles (depending on role)  
+        [Required]
+        public string FirstName { get; set; }
+
+        [Required]
+        public string LastName { get; set; }
+
         public string? ProfileImageUrl { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public bool IsActive { get; set; } = true; // Default: Active
-
-
+        public bool IsActive { get; set; } = true; // Default: Active  
     }
 }

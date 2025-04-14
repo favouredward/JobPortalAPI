@@ -1,9 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using JobPortalAPI.Data;
 using JobPortalAPI.Models;
-using System.Security.Claims;
+using JobPortalAPI.Services;
+using System.Threading.Tasks;
 
 namespace JobPortalAPI.Controllers
 {
@@ -11,11 +10,11 @@ namespace JobPortalAPI.Controllers
     [ApiController]
     public class JobsController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly JobService _jobService;
 
-        public JobsController(ApplicationDbContext context)
+        public JobsController(JobService jobService)
         {
-            _context = context;
+            _jobService = jobService;
         }
 
         // ✅ Create a Job (Only Employers can post jobs)
@@ -26,9 +25,8 @@ namespace JobPortalAPI.Controllers
             if (job == null)
                 return BadRequest("Invalid job data.");
 
-            _context.Jobs.Add(job);
-            await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetJobById), new { id = job.Id }, job);
+            var createdJob = await _jobService.CreateJobAsync(job);
+            return CreatedAtAction(nameof(GetJobById), new { id = createdJob.Id }, createdJob);
         }
 
         // ✅ Get All Jobs (Anyone can view)
@@ -36,7 +34,7 @@ namespace JobPortalAPI.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> GetJobs()
         {
-            var jobs = await _context.Jobs.ToListAsync();
+            var jobs = await _jobService.GetAllJobsAsync();
             return Ok(jobs);
         }
 
@@ -45,7 +43,7 @@ namespace JobPortalAPI.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> GetJobById(int id)
         {
-            var job = await _context.Jobs.FindAsync(id);
+            var job = await _jobService.GetJobByIdAsync(id);
             if (job == null)
                 return NotFound("Job not found.");
 
@@ -57,19 +55,13 @@ namespace JobPortalAPI.Controllers
         [Authorize(Roles = "Employer")]
         public async Task<IActionResult> UpdateJob(int id, [FromBody] Job updatedJob)
         {
-            var job = await _context.Jobs.FindAsync(id);
+            var job = await _jobService.GetJobByIdAsync(id);
             if (job == null)
                 return NotFound("Job not found.");
 
-            job.Title = updatedJob.Title;
-            job.Description = updatedJob.Description;
-            job.Company = updatedJob.Company;
-            job.Location = updatedJob.Location;
-            job.IsOpen = updatedJob.IsOpen;
-
-            _context.Jobs.Update(job);
-            await _context.SaveChangesAsync();
-            return Ok(job);
+            updatedJob.Id = id; // Ensure the ID is consistent
+            var updated = await _jobService.CreateJobAsync(updatedJob);
+            return Ok(updated);
         }
 
         // ✅ Delete a Job (Only Admins can delete jobs)
@@ -77,12 +69,10 @@ namespace JobPortalAPI.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteJob(int id)
         {
-            var job = await _context.Jobs.FindAsync(id);
-            if (job == null)
+            var result = await _jobService.DeleteJobAsync(id);
+            if (!result)
                 return NotFound("Job not found.");
 
-            _context.Jobs.Remove(job);
-            await _context.SaveChangesAsync();
             return Ok("Job deleted successfully.");
         }
     }

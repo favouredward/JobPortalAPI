@@ -1,71 +1,48 @@
-﻿// Controllers/AuthController.cs
+﻿using JobPortalAPI.DTOs;
 using JobPortalAPI.Models;
+using JobPortalAPI.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Text;
-using System.Security.Claims;
-using BCrypt.Net;
-using System;
-using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace JobPortalAPI.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/auth")]
     [ApiController]
     public class AuthController : ControllerBase
     {
-        private readonly IConfiguration _configuration;
-        // In a real application, inject your user repository/service here
-        private static List<User> _users = new List<User>();
+        private readonly AuthService _authService;
 
-        public AuthController(IConfiguration configuration)
+        public AuthController(AuthService authService)
         {
-            _configuration = configuration;
+            _authService = authService;
         }
 
         [HttpPost("register")]
-        public IActionResult Register([FromBody] User user)
+        public async Task<IActionResult> Register([FromBody] RegisterUserDTO registerUser)
         {
-            // Validate input (could use FluentValidation)
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            var user = new User
+            {
+                Email = registerUser.Email,
+                FirstName = registerUser.FirstName,
+                LastName = registerUser.LastName,
+                Role = registerUser.Role
+            };
 
-            // Hash the password using BCrypt
-            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(user.PasswordHash);
-            user.CreatedAt = DateTime.UtcNow;
-            _users.Add(user);
+            var result = await _authService.RegisterUserAsync(user, registerUser.Password);
+            if (!result)
+                return BadRequest("Registration failed. Email might already be in use.");
+
             return Ok(new { message = "Registration successful" });
         }
 
         [HttpPost("login")]
-        public IActionResult Login([FromBody] User login)
+        public async Task<IActionResult> Login([FromBody] User login)
         {
-            // Find user by email (in real app, query your database)
-            var user = _users.Find(u => u.Email == login.Email);
-            if (user == null || !BCrypt.Net.BCrypt.Verify(login.PasswordHash, user.PasswordHash))
-            {
+            var token = await _authService.LoginUserAsync(login.Email, login.PasswordHash);
+            if (string.IsNullOrEmpty(token))
                 return Unauthorized(new { message = "Invalid credentials" });
-            }
 
-            // Generate JWT token
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]);
-            var tokenDescriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(new Claim[]
-                {
-                    new Claim(ClaimTypes.Name, user.Email),
-                    new Claim(ClaimTypes.Role, user.Role.ToString())
-                }),
-                Expires = DateTime.UtcNow.AddMinutes(Convert.ToDouble(_configuration["Jwt:ExpiryInMinutes"])),
-                Issuer = _configuration["Jwt:Issuer"],
-                Audience = _configuration["Jwt:Audience"],
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-            };
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            return Ok(new { token = tokenHandler.WriteToken(token) });
+            return Ok(new { token });
         }
     }
 }

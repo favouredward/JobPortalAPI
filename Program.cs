@@ -4,44 +4,14 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using JobPortalAPI.Data;
 using Microsoft.OpenApi.Models;
+using JobPortalAPI.Services;
 
 var builder = WebApplication.CreateBuilder(args);
-
 
 // Add Swagger services
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "Job Portal API",
-        Version = "v1",
-        Description = "API for Job Portal with Authentication, Job Posting, Applications, and Admin Management"
-    });
-
-    // Add JWT authentication to Swagger
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "Enter 'Bearer <your_token>'",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer"
-    });
-
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            new string[] {}
-        }
-    });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Job Portal API", Version = "v1" });
 });
 
 // ✅ Load Configuration Properly
@@ -53,7 +23,6 @@ if (string.IsNullOrEmpty(connectionString))
 {
     throw new InvalidOperationException("Database connection string is missing.");
 }
-
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
@@ -87,10 +56,31 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 
+builder.Services.AddScoped<AdminService>();
+builder.Services.AddScoped<JobService>();
+builder.Services.AddScoped<ApplicationService>();
+builder.Services.AddScoped<AuthService>();
+
+
+// ✅ Add CORS Policy
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
+// ✅ Build the app **(Only call this once!)**
 var app = builder.Build();
 
+// ✅ Enable CORS before authentication/authorization
+app.UseCors("AllowAll");
+
+// Configure middleware
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

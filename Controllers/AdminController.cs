@@ -1,10 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using JobPortalAPI.Data;
-using JobPortalAPI.Models;
+using JobPortalAPI.Services;
 using System.Threading.Tasks;
-using System.Linq;
 
 namespace JobPortalAPI.Controllers
 {
@@ -13,18 +10,18 @@ namespace JobPortalAPI.Controllers
     [Authorize(Roles = "Admin")] // Restrict all actions to Admin only
     public class AdminController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly AdminService _adminService;
 
-        public AdminController(ApplicationDbContext context)
+        public AdminController(AdminService adminService)
         {
-            _context = context;
+            _adminService = adminService;
         }
 
         // ✅ Get All Users
         [HttpGet("users")]
         public async Task<IActionResult> GetAllUsers()
         {
-            var users = await _context.Users.ToListAsync();
+            var users = await _adminService.GetAllUsersAsync();
             return Ok(users);
         }
 
@@ -32,13 +29,10 @@ namespace JobPortalAPI.Controllers
         [HttpPut("users/{userId}/status")]
         public async Task<IActionResult> UpdateUserStatus(string userId, [FromBody] bool isActive)
         {
-            var user = await _context.Users.FindAsync(userId);
-            if (user == null)
+            var result = await _adminService.UpdateUserRoleAsync(userId, isActive ? "Active" : "Inactive");
+            if (!result)
                 return NotFound("User not found.");
 
-            user.IsActive = isActive;
-            _context.Users.Update(user);
-            await _context.SaveChangesAsync();
             return Ok($"User {(isActive ? "activated" : "deactivated")} successfully.");
         }
 
@@ -46,13 +40,10 @@ namespace JobPortalAPI.Controllers
         [HttpPut("jobs/{jobId}/approve")]
         public async Task<IActionResult> ApproveJob(int jobId, [FromBody] bool isApproved)
         {
-            var job = await _context.Jobs.FindAsync(jobId);
-            if (job == null)
+            var result = await _adminService.UpdateUserRoleAsync(jobId.ToString(), isApproved ? "Approved" : "Rejected");
+            if (!result)
                 return NotFound("Job not found.");
 
-            job.IsApproved = isApproved;
-            _context.Jobs.Update(job);
-            await _context.SaveChangesAsync();
             return Ok($"Job {(isApproved ? "approved" : "rejected")} successfully.");
         }
 
@@ -60,16 +51,8 @@ namespace JobPortalAPI.Controllers
         [HttpGet("stats")]
         public async Task<IActionResult> GetStatistics()
         {
-            var userCount = await _context.Users.CountAsync();
-            var jobCount = await _context.Jobs.CountAsync();
-            var applicationCount = await _context.JobApplications.CountAsync();
-
-            return Ok(new
-            {
-                TotalUsers = userCount,
-                TotalJobs = jobCount,
-                TotalApplications = applicationCount
-            });
+            var stats = await _adminService.GetAllUsersAsync();
+            return Ok(stats);
         }
     }
 }
