@@ -27,6 +27,9 @@ namespace JobPortalAPI.Models
         public string LastName { get; set; }
 
         public string? ProfileImageUrl { get; set; }
+        public string? CVUrl { get; set; } // For Job Seekers
+        public string? CompanyName { get; set; } // For Employers
+        public string? CompanyDescription { get; set; } // For Employers
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public bool IsActive { get; set; } = true; // Default: Active  
     }

@@ -53,5 +53,31 @@ namespace JobPortalAPI.Services
             await _context.SaveChangesAsync();
             return true;
         }
+
+        // Approve or reject a job
+        public async Task<bool> ApproveJobAsync(int jobId, bool isApproved)
+        {
+            var job = await _context.Jobs.FindAsync(jobId);
+            if (job == null) return false;
+
+            job.IsApproved = isApproved;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        // Get system statistics
+        public async Task<object> GetStatisticsAsync()
+        {
+            var userCount = await _context.Users.CountAsync();
+            var jobCount = await _context.Jobs.CountAsync();
+            var applicationCount = await _context.JobApplications.CountAsync();
+
+            return new
+            {
+                Users = userCount,
+                Jobs = jobCount,
+                Applications = applicationCount
+            };
+        }
     }
 }
